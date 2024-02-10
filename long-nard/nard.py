@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import random
@@ -95,7 +96,6 @@ class Record:
         self.min_party: int = 0
         self.max_party: int = 0
         self.avg_party: int = 0
-        self.reset()
 
     def reset(self) -> None:
         """Сбросить статистику."""
@@ -112,17 +112,17 @@ class Record:
         @param filename Имя файла
         @return Экземпляр класса статистики
         """
-        table: list[int] = []
+        data: dict = {}
         if os.path.exists(filename):
             with open(filename, "r", encoding="utf-8") as file:
-                table += [int(word) for line in file for word in line.split()]
-        self.sum = int(table[0]) if len(table) > 0 else 0
-        self.underplayed = table[1] if len(table) > 1 else 0
-        self.player_one = table[2] if len(table) > 2 else 0
-        self.player_two = table[3] if len(table) > 3 else 0
-        self.min_party = table[4] if len(table) > 4 else 0
-        self.max_party = table[5] if len(table) > 5 else 0
-        self.avg_party = table[6] if len(table) > 6 else 0
+                data = json.load(file)
+        self.sum = int(data.get("sum", 0))
+        self.underplayed = int(data.get("underplayed", 0))
+        self.player_one = int(data.get("player_one", 0))
+        self.player_two = int(data.get("player_two", 0))
+        self.min_party = int(data.get("min_party", 0))
+        self.max_party = int(data.get("max_party", 0))
+        self.avg_party = int(data.get("avg_party", 0))
         return self
 
     def get_table(self) -> list[int]:
@@ -143,9 +143,17 @@ class Record:
         """Записать файл статистики.
         @param filename Имя файла
         """
-        table = self.get_table()
+        data: dict = {
+            "sum": self.sum,
+            "underplayed": self.underplayed,
+            "player_one": self.player_one,
+            "player_two": self.player_two,
+            "min_party": self.min_party,
+            "max_party": self.max_party,
+            "avg_party": self.avg_party,
+        }
         with open(filename, "w", encoding="utf-8") as file:
-            file.write(" ".join(str(x) for x in table))
+            json.dump(data, file, indent=4)
 
 
 class State:
@@ -1570,7 +1578,7 @@ class Game:
 
 def main() -> None:
     """Точка входа."""
-    filename = "./resources/record.dat"
+    filename = "./resources/record.json"
     record = Record().read(filename)
 
     game = Game(record)
