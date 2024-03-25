@@ -7,6 +7,7 @@ import math
 import os
 import random
 import sys
+from dataclasses import dataclass, asdict, fields
 from enum import Enum, unique
 
 import pygame
@@ -21,113 +22,221 @@ import pygame
 # @section notes_main Notes
 # Simple notes
 ##
-# @file main.py
+# @file nard.py
 #
 # @brief Long Nardy game program with Doxygen style comments.
 #
 # @section description_doxygen_example Description
 # Long Nardy game program with Doxygen style comments.
+# @startuml
+# class Game {
+# }
+# class Party {
+# }
+# class Dice {
+#     - first: int
+#     - second: int
+#     + roll_one(dice_number: int): void
+#     + roll_both(): void
+#     + reset(): void
+#     + is_doubling(): bool
+# }
+# class Record {
+#     - sum: int
+#     - underplayed: int
+#     - player_one: int
+#     - player_two: int
+#     - min_party: int
+#     - max_party: int
+#     - avg_party: int
+#     + reset(): void
+#     + load_from_file(filename: str): Record
+#     + write(filename: str): void
+# }
+# class State {
+#     + init_board(): void
+#     + copy(state: State): void
+#     + reset_board(): void
+# }
+# class TreeMove {
+# }
+# class Control {
+#     - party: Party
+#     - settings: Settings
+#     - record: Record
+# }
+# class Settings {
+#     + players: Player[]
+# }
+# class Display {
+#     - party: Party
+#     - control: Control
+# }
+# class AbstractLayer {
+#     - display: Display
+# }
+# class Menu extends AbstractLayer {
+# }
+# class Panel extends AbstractLayer {
+# }
+# class Pieces extends AbstractLayer {
+# }
+# class Button {
+#     - status: ButtonStatus
+#     - text: String
+#     - x_pos: int
+#     - y_pos: int
+#     + init(): Button
+#     + change(): void
+# }
+# class Piece {
+#     - color: int
+#     - status: PieceStatus
+# }
+# enum ButtonStatus {
+#     ENABLED
+#     DISABLED
+#     TEXT
+# }
+# enum PieceStatus {
+#     STAY
+#     TO_HOME
+#     CLICKED
+# }
+# enum Player {
+#     HUMAN
+#     COMPUTER
+# }
+# Game -- Control
+# Game -- Display
+# Display *-- Menu
+# Display *-- Panel
+# Display *-- Pieces
+# Display -- Party
+# Control *-- Settings
+# Control -- Record
+# Control *-- Party
+# Party *-- Dice
+# Party *-- State
+# Party o-- TreeMove
+# AbstractLayer <|-- Menu
+# AbstractLayer <|-- Panel
+# AbstractLayer <|-- Pieces
+# AbstractLayer o-- Display
+# @enduml
 
 
-def time_to_text(time: int) -> str:
-    """Преобразовать секунды в строку.
-    @param time Число секунд
-    @return Строковое представление времени
+
+def time_to_text(time_in_seconds: int) -> str:
     """
-    t_sec = time % 60
-    t_min = (time // 60) % 60
-    t_hour = time // 3600
-    return f"{t_hour:d}:{t_min:02d}:{t_sec:02d}"
+    Преобразует время в секундах в форматированную строку "чч:мм:сс".
+
+    @param time_in_seconds: Время в секундах для конвертации.
+    @return: Строка, представляющая время в формате "чч:мм:сс".
+    """
+    hrs, sec_remain = divmod(time_in_seconds, 3600)
+    mins, secs = divmod(sec_remain, 60)
+    return f"{hrs:d}:{mins:02d}:{secs:02d}"
 
 
 class Dice:
-    """Класс кубиков."""
+    """
+    Класс для работы с кубиками в нарды.
+    Позволяет выполнять различные операции с кубиками, такие как бросок, сброс и проверку на дубль.
+    """
 
     def __init__(self, first: int = 0, second: int = 0):
-        """Конструктор.
-        @param first Значение первого кубика
-        @param second Значение второго кубика
+        """
+        Конструктор.
+
+        @param first Значение первого кубика.
+        @param second Значение второго кубика.
         """
         self.first = first
         self.second = second
 
-    def copy(self, dice: Dice) -> None:
-        """Копировать
-        @param dice Экземпляр кубиков
+    def copy(self, other_dice: Dice) -> None:
         """
-        self.first = dice.first
-        self.second = dice.second
+        Копировать значения из другого экземпляра.
+
+        @param other_dice: Экземпляр для копирования.
+        """
+        self.first = other_dice.first
+        self.second = other_dice.second
 
     def reset(self) -> None:
-        """Сбросить состояние кубиков"""
+        """
+        Сбросить значения кубиков.
+        """
         self.first = 0
         self.second = 0
 
     def roll_both(self) -> None:
-        """Бросить оба кубика"""
+        """
+        Бросить оба кубика.
+        """
         self.first = random.randint(1, 6)
         self.second = random.randint(1, 6)
 
-    def roll(self, number: int) -> None:
-        """Бросить кубик.
-        @param number Какой кубик бросить
+    def roll_one(self, dice_number: int) -> None:
         """
-        if number == 0:
+        Бросить один кубик.
+
+        @param dice_number: Номер кубика для броска (0 или 1).
+        """
+        if dice_number == 0:
             self.first = random.randint(1, 6)
-        elif number == 1:
+        elif dice_number == 1:
             self.second = random.randint(1, 6)
 
     def is_doubling(self) -> bool:
-        """Проверить, выпал ли дубль.
-        @return Выпал ли дубль
+        """
+        Проверить на дубль.
+
+        @return: True при дубле.
         """
         return self.first == self.second
 
 
+@dataclass
 class Record:
-    """Класс статистики."""
-
-    def __init__(self) -> None:
-        """Конструктор."""
-        self.sum: int = 0
-        self.underplayed: int = 0
-        self.player_one: int = 0
-        self.player_two: int = 0
-        self.min_party: int = 0
-        self.max_party: int = 0
-        self.avg_party: int = 0
+    """
+    Класс для сохранения статистики игровых партий.
+    Предоставляет функционал для работы со статистикой игр, включая чтение и запись в файл.
+    """
+    sum: int = 0
+    underplayed: int = 0
+    player_one: int = 0
+    player_two: int = 0
+    min_party: int = 0
+    max_party: int = 0
+    avg_party: int = 0
 
     def reset(self) -> None:
-        """Сбросить статистику."""
-        self.sum = 0
-        self.underplayed = 0
-        self.player_one = 0
-        self.player_two = 0
-        self.min_party = 0
-        self.max_party = 0
-        self.avg_party = 0
-
-    def read(self, filename: str) -> Record:
-        """Прочитать файл статистики.
-        @param filename Имя файла
-        @return Экземпляр класса статистики
         """
-        data: dict = {}
+        Сбросить статистику.
+        """
+        self.__init__()
+
+    def load_from_file(self, filename: str) -> Record:
+        """
+        Прочитать файл статистики.
+
+        @param filename: Имя файла
+        @return: Экземпляр класса статистики
+        """
         if os.path.exists(filename):
             with open(filename, "r", encoding="utf-8") as file:
                 data = json.load(file)
-        self.sum = int(data.get("sum", 0))
-        self.underplayed = int(data.get("underplayed", 0))
-        self.player_one = int(data.get("player_one", 0))
-        self.player_two = int(data.get("player_two", 0))
-        self.min_party = int(data.get("min_party", 0))
-        self.max_party = int(data.get("max_party", 0))
-        self.avg_party = int(data.get("avg_party", 0))
+            for field in fields(self):
+                setattr(self, field.name, int(data.get(field.name, 0)))
         return self
 
     def get_table(self) -> list[int]:
-        """Получить таблицу со статистикой.
-        @return Табличный вид статистики
+        """
+        Получить таблицу со статистикой.
+
+        @return: Табличный вид статистики
         """
         return [
             self.sum,
@@ -140,157 +249,142 @@ class Record:
         ]
 
     def write(self, filename: str) -> None:
-        """Записать файл статистики.
+        """
+        Записать файл статистики.
+
         @param filename Имя файла
         """
-        data: dict = {
-            "sum": self.sum,
-            "underplayed": self.underplayed,
-            "player_one": self.player_one,
-            "player_two": self.player_two,
-            "min_party": self.min_party,
-            "max_party": self.max_party,
-            "avg_party": self.avg_party,
-        }
         with open(filename, "w", encoding="utf-8") as file:
-            json.dump(data, file, indent=4)
+            json.dump(asdict(self), file, indent=4)
 
 
 class State:
-    """Класс состояния игровой доски."""
+    """
+    Представляет состояние игровой доски.
+    Класс хранит все параметры текущего состояния доски и позволяет манипулировать ими.
+    """
 
     def __init__(self, state: State | None = None):
-        """Конструктор.
-        @param state Состояние доски
+        """
+        Конструктор.
+
+        @param state: Состояние доски.
+        """
+        self.__reset_board()
+        if state is not None:
+            self.copy(state)
+
+    def __reset_board(self) -> None:
+        """
+        Сбросить состояние доски к начальному.
         """
         self.checkers = [0] * 26
         self.owner = [-1] * 26
         self.ind = [[-1] for _ in range(26)]
-        self.player = 0
+        self.player = self.step = self.move = 0
         self.dice: Dice = Dice()
-        self.step = 0
-        self.move = 0
-        self.remained_die: list[int] = []
-        self.played_head = False
-        self.color = 0
-        self.amount = 0
-        self.left = 0
-        if state is not None:
-            self.copy(state)
-        else:
-            self.init()
-
-    def init(self):
-        """Инициализировать."""
-        for i in range(26):
-            self.checkers[i] = 0
-            self.owner[i] = -1
-        self.checkers[24] = self.checkers[25] = 15
-        self.owner[24] = 0
-        self.owner[25] = 1
-        self.init_ind()
-        self.dice.reset()
-        self.player = 0
-        self.step = 0
-        self.move = 0
         self.remained_die = []
         self.played_head = False
-        self.color = 0
-        self.amount = 30
-        self.left = 0
+        self.color = self.amount = self.left = 0
+        self.init_board()
+
+    def init_board(self) -> None:
+        """
+        Инициализировать начальное состояние доски.
+        """
+        self.checkers[24:] = [15, 15]
+        self.owner[24:] = [0, 1]
+        self.init_ind()
 
     def copy(self, state: State) -> None:
-        """Копировать состояние доски.
-        @param state Состояние доски
         """
-        self.checkers = state.checkers[:]
-        self.owner = state.owner[:]
-        for i in range(26):
-            self.ind[i].clear()
-            for j in range(len(state.ind[i])):
-                self.ind[i].append(state.ind[i][j])
-        self.player = state.player
-        self.dice.copy(state.dice)
-        self.remained_die = state.remained_die[:]
-        self.step = state.step
-        self.move = state.move
-        self.color = state.color
-        self.played_head = state.played_head
-        self.amount = state.amount
-        self.left = state.left
+        Копировать состояние доски из другого экземпляра.
+
+        @param state: Состояние доски
+        """
+        self.__dict__ = {k: v.copy() if isinstance(v, list) else v
+                         for k, v in state.__dict__.items()}
 
     def init_ind(self) -> None:
-        """Инициализировать позиции шашек."""
-        cnt_w = 0
-        cnt_b = 15
-        for i in range(26):
-            self.ind[i].clear()
-            self.ind[i].append(self.owner[i])
-            for _ in range(self.checkers[i]):
-                if self.owner[i] == 0:
-                    self.ind[i].append(cnt_w)
-                    cnt_w += 1
-                if self.owner[i] == 1:
-                    self.ind[i].append(cnt_b)
-                    cnt_b += 1
+        """
+        Инициализировать позиции шашек.
+        """
+        cnt = [0, 15]
+        for i, (owner, checkers) in enumerate(zip(self.owner, self.checkers)):
+            self.ind[i] = [owner] + \
+                list(range(cnt[owner], cnt[owner] + checkers))
+            cnt[owner] += checkers
 
     def __relative_pos(self, pos: int) -> int:
-        """Вернуть позицию относительно головы игрока.
-        @param pos Абсолютная позиция
-        @return Относительная позиция
+        """
+        Вернуть позицию относительно головы игрока.
+
+        @param pos: Абсолютная позиция
+        @return: Относительная позиция
         """
         return (pos + 12 * self.player) % 24
 
     def __opponent_pos(self, pos: int) -> int:
-        """Вернуть позицию относительно головы оппонента.
-        @param pos Абсолютная позиция
-        @return Относительная позиция
+        """
+        Вернуть позицию относительно головы оппонента.
+
+        @param pos: Абсолютная позиция
+        @return: Относительная позиция
         """
         return (pos + 12 * (1 - self.player)) % 24
 
     def __is_player_pos(self, pos: int) -> bool:
-        """Проверить, есть ли шашки игрока в лунке.
-        @param pos Абсолютная позиция
-        @return Флаг наличия шашек игрока в позиции
+        """
+        Проверить, есть ли шашки игрока в лунке.
+
+        @param pos: Абсолютная позиция
+        @return: Флаг наличия шашек игрока в позиции
         """
         return self.owner[pos] == self.player ^ self.color
 
     def __is_empty_pos(self, pos: int) -> bool:
-        """Проверить, свободна ли лунка.
-        @param pos Абсолютная позиция
-        @return Флаг отсутствия шашек в позиции
+        """
+        Проверить, свободна ли лунка.
+
+        @param pos: Абсолютная позиция
+        @return: Флаг отсутствия шашек в позиции
         """
         return self.owner[pos] == -1
 
     def __is_opponent_pos(self, pos: int) -> bool:
-        """Проверить, занята ли лунка оппонентом.
-        @param pos Абсолютная позиция
-        @return Флаг наличия шашек оппонента в позиции
+        """
+        Проверить, занята ли лунка оппонентом.
+
+        @param pos: Абсолютная позиция
+        @return: Флаг наличия шашек оппонента в позиции
         """
         return not self.__is_empty_pos(pos) and not self.__is_player_pos(pos)
 
     def __is_home(self) -> bool:
-        """Проверить, все ли шашки в доме.
-        @return Флаг полноты шашек в доме
         """
-        for i in range(18):
-            if self.__is_player_pos(self.__relative_pos(i)):
-                return False
-        return True
+        Проверить, все ли шашки в доме.
+
+        @return: Флаг полноты шашек в доме
+        """
+        return all(not self.__is_player_pos(self.__relative_pos(i)) for i in range(18))
 
     def is_remove_checkers(self, pos: int, number: int) -> bool:
-        """Проверить, снятие ли шашки с доски.
-        @param pos Абсолютная позиция
-        @param number Длина хода
-        @return Флаг снятия шашки с доски
+        """
+        Проверить, снятие ли шашки с доски.
+
+        @param pos: Абсолютная позиция
+        @param number: Длина хода
+        @return: Флаг снятия шашки с доски
         """
         return self.__relative_pos(pos) + number >= 24
 
     def __is_high_order(self, pos: int, number: int) -> bool:
-        """Проверить, снятие ли с доски шашки старшего разряда.
-        @param pos Абсолютная позиция
-        @param number Длина хода
-        @return Флаг снятие старшей шашки с доски
+        """
+        Проверить, снятие ли с доски шашки старшего разряда.
+
+        @param pos: Абсолютная позиция
+        @param number: Длина хода
+        @return: Флаг снятие старшей шашки с доски
         """
         diff = self.__relative_pos(pos) + number - 24
         for i in range(pos - diff, pos):
@@ -299,26 +393,28 @@ class State:
         return True
 
     def is_one_line(self) -> bool:
-        """Проверить законность блока.
-        @return Флаг законности блока
         """
-        max_count = 0
+        Проверить законность блока.
+
+        @return: Флаг законности блока
+        """
         count = 0
         for i in range(23, -1, -1):
             if self.__is_player_pos(self.__opponent_pos(i)):
                 count += 1
-                max_count = max(max_count, count)
-            if self.__is_empty_pos(self.__opponent_pos(i)):
+                if count > 5:
+                    return True
+            elif self.__is_empty_pos(self.__opponent_pos(i)):
                 count = 0
-            if self.__is_opponent_pos(self.__opponent_pos(i)):
+            elif self.__is_opponent_pos(self.__opponent_pos(i)):
                 break
-        if max_count > 5:
-            return True
         return False
 
     def get_checkers_pos(self) -> list[int]:
-        """Вернуть номера позиций игрока.
-        @return Список позиций игрока
+        """
+        Вернуть номера позиций игрока.
+
+        @return: Список позиций игрока
         """
         res: list[int] = []
         for i in range(24):
@@ -327,7 +423,9 @@ class State:
         return res
 
     def fill_dice(self) -> None:
-        """Заполнить очки на ход."""
+        """
+        Заполнить очки на ход.
+        """
         if not self.remained_die and self.step == 0:
             if self.dice.is_doubling():
                 self.remained_die = [self.dice.first] * 4
@@ -335,85 +433,98 @@ class State:
                 self.remained_die = [self.dice.first, self.dice.second]
 
     def __play_die(self, number: int) -> None:
-        """Убрать кубик.
-        @param number Номер кубика выполненного хода
+        """
+        Убрать кубик.
+
+        @param number: Номер кубика выполненного хода
         """
         self.fill_dice()
         del self.remained_die[self.remained_die.index(number)]
 
     def right_move(self, start: int, number: int) -> bool:
-        """Проверить ход и сходить.
-        @param start Позиция начала хода
-        @param number Длина хода
-        @return Флаг правильности хода
         """
-        if not self.__is_player_pos(start):
-            return False
-        if self.step > 0 and not self.remained_die:
-            return False
-        if number not in self.remained_die:
-            return False
-        # Ход шашек
-        if not self.is_remove_checkers(start, number):
-            if not self.__is_opponent_pos((start + number) % 24):
-                if self.__relative_pos(start) == 0:
-                    if self.played_head:
-                        if self.move == 0:
-                            if self.dice.is_doubling():
-                                if not (
-                                    (self.dice.first == 3 and self.step == 3)
-                                    or (self.dice.first == 4 and self.step == 2)
-                                    or (self.dice.first == 6 and self.step == 1)
-                                ):
-                                    return False
-                            else:
-                                return False
-                        else:
-                            return False
-                    else:
-                        self.played_head = True
-                self.ind[(start + number) % 24].append(self.ind[start].pop())
-                if len(self.ind[start]) == 1:
-                    self.ind[start][0] = -1
-                if self.ind[(start + number) % 24][0] == -1:
-                    self.ind[(start + number) % 24][0] = self.owner[start]
-                self.checkers[(start + number) % 24] += 1
-                self.owner[(start + number) % 24] = self.owner[start]
-                self.checkers[start] -= 1
-                if self.checkers[start] == 0:
-                    self.owner[start] = -1
-                self.__play_die(number)
+        Проверить ход и сходить.
 
-                self.step += 1
-                return True
+        @param start: Позиция начала хода
+        @param number: Длина хода
+        @return: Флаг правильности хода
+        """
+        if not self.__validate_move_conditions(start, number):
             return False
-        # Вывод шашек
-        if not self.__is_home():
+        if not self.is_remove_checkers(start, number):
+            return self.__make_regular_move(start, number)
+        return self.__make_removal_move(start, number)
+
+    def __validate_move_conditions(self, start: int, number: int) -> bool:
+        """
+        Проверить основные условия для хода.
+
+        @param start: Начальная позиция.
+        @param number: Длина хода.
+        @return: Возможность совершения хода.
+        """
+        conditions = (
+            self.__is_player_pos(start),
+            self.step <= 0 or self.remained_die,
+            number in self.remained_die
+        )
+        return all(conditions)
+
+    def __make_regular_move(self, start: int, number: int) -> bool:
+        target = (start + number) % 24
+        if self.__is_opponent_pos(target) or not self.__can_play_head(start):
             return False
-        # Вывод шашек низшего разряда
-        if self.__is_high_order(start, number):
-            self.ind[24 + self.player].append(self.ind[start].pop())
-            if len(self.ind[start]) == 1:
-                self.ind[start][0] = -1
-            self.checkers[24 + self.player] += 1
-            self.checkers[start] -= 1
-            if self.checkers[start] == 0:
-                self.owner[start] = -1
-            self.__play_die(number)
-            self.step += 1
+        self.__move_checker(start, target)
+        self.__play_die(number)
+        self.step += 1
+        return True
+
+    def __can_play_head(self, start: int) -> bool:
+        if self.__relative_pos(start) != 0:
             return True
-        return False
+        if not self.played_head:
+            self.played_head = True
+            return True
+        if self.move == 0 and self.dice.is_doubling() and (self.dice.first, self.step) not in [(3, 3), (4, 2), (6, 1)]:
+            return False
+        return True
+
+    def __move_checker(self, start: int, target: int):
+        self.ind[target].append(self.ind[start].pop())
+        self.__update_board(start, target)
+
+    def __update_board(self, start: int, target: int):
+        if len(self.ind[start]) == 1:
+            self.ind[start][0] = -1
+        if self.ind[target][0] == -1:
+            self.ind[target][0] = self.owner[start]
+        self.checkers[target] += 1
+        self.owner[target] = self.owner[start]
+        self.checkers[start] -= 1
+        if self.checkers[start] == 0:
+            self.owner[start] = -1
+
+    def __make_removal_move(self, start: int, number: int) -> bool:
+        if not self.__is_home() or not self.__is_high_order(start, number):
+            return False
+        target = 24 + self.player
+        self.__move_checker(start, target)
+        self.__play_die(number)
+        self.step += 1
+        return True
 
 
 class TreeMove:
-    """Класс дерева возможных ходов."""
+    """
+    Класс дерева возможных ходов.
+    Используется для анализа возможных ходов и сценариев развития игровой ситуации.
+    """
 
     def __init__(self, state: State, start: int, die: int):
         """Конструктор.
         @param state Состояние доски
         @param start Позиция начала хода
         @param die Длина хода
-        @return Дерево возможных ходов
         """
         self.state: State = state
         self.state.left = 0
@@ -494,7 +605,9 @@ class TreeMove:
 
 @unique
 class Stage(Enum):
-    """Перечисление этапов хода игрока."""
+    """
+    Перечисление этапов хода игрока.
+    """
 
     INIT = 0
     BEGIN = 1
@@ -506,7 +619,10 @@ class Stage(Enum):
 
 
 class Party:
-    """Класс игровой доски."""
+    """
+    Класс игровой доски.
+    Управляет процессом игры, включая начало новой игры и выполнение ходов.
+    """
 
     def __init__(self):
         """Конструктор."""
@@ -520,7 +636,7 @@ class Party:
     def new_party(self) -> None:
         """Начать новую партию."""
         self.stage = Stage.BEGIN
-        self.state.init()
+        self.state.init_board()
         self.tree = None
         self.count = 0
         self.color = None
@@ -597,7 +713,9 @@ class Party:
 
 @unique
 class ButtonStatus(Enum):
-    """Перечисление состояния кнопок."""
+    """
+    Перечисление состояния кнопок.
+    """
 
     DISABLED = 0
     ENABLED = 1
@@ -605,7 +723,10 @@ class ButtonStatus(Enum):
 
 
 class Button(pygame.sprite.Sprite):
-    """Класс кнопок."""
+    """
+    Описывает кнопку в интерфейсе игры.
+    Класс позволяет создавать и менять состояние кнопок на экране.
+    """
 
     def __init__(self, *groups):
         """!Конструктор.
@@ -703,14 +824,19 @@ class Button(pygame.sprite.Sprite):
 
 @unique
 class Player(Enum):
-    """Перечисление типов игрока."""
+    """
+    Перечисление типов игрока (Человек, Компьютер).
+    """
 
     HUMAN = 0
     COMPUTER = 1
 
 
 class Settings:
-    """Настройки."""
+    """
+    Класс настроек игры.
+    Хранит настройки партии, включая типы игроков.
+    """
 
     def __init__(self, players: list[Player]) -> None:
         """Конструктор.
@@ -722,7 +848,10 @@ class Settings:
 
 
 class Control:
-    """Класс контроллера."""
+    """
+    Класс контроллера, управляющего логикой игры.
+    Реализует связь между моделью (логикой игры), представлением (интерфейс) и настройками.
+    """
 
     def __init__(self, party: Party, settings: Settings, record: Record):
         """Конструктор.
@@ -820,7 +949,7 @@ class Control:
                 self.display.panel.toggle_throw(False)
                 if self.party.state.player == 0:
                     self.dice.reset()
-            self.dice.roll(self.party.state.player)
+            self.dice.roll_one(self.party.state.player)
         if self.party.stage == Stage.ROLL:
             self.display.panel.toggle_throw(False)
             self.dice.roll_both()
@@ -859,7 +988,8 @@ class Control:
                 if self.record.min_party == 0:
                     self.record.min_party = self.time
                 else:
-                    self.record.min_party = min(self.record.min_party, self.time)
+                    self.record.min_party = min(
+                        self.record.min_party, self.time)
                 self.record.max_party = max(self.record.max_party, self.time)
                 self.record.avg_party = (
                     self.record.avg_party * self.record.sum + self.time
@@ -972,7 +1102,9 @@ class Control:
 
 @unique
 class PieceStatus(Enum):
-    """Перечисление состояния шашки."""
+    """
+    Перечисление состояния шашки (находится на месте, идет домой, выбрана).
+    """
 
     STAY = 0
     TO_HOME = 1
@@ -980,7 +1112,10 @@ class PieceStatus(Enum):
 
 
 class Piece(pygame.sprite.Sprite):
-    """Класс элемента шашки."""
+    """
+    Класс элемента шашки.
+    Представляет собой шашку на доске, с возможностью перемещения и взаимодействия.
+    """
 
     def __init__(self, *groups):
         """Конструктор.
@@ -1012,9 +1147,11 @@ class Piece(pygame.sprite.Sprite):
         self.__idd = idd
         self.color = color
         if self.color == 0:
-            self.image = pygame.image.load("./resources/white.png").convert_alpha()
+            self.image = pygame.image.load(
+                "./resources/white.png").convert_alpha()
         else:
-            self.image = pygame.image.load("./resources/black.png").convert_alpha()
+            self.image = pygame.image.load(
+                "./resources/black.png").convert_alpha()
         self.rect = self.image.get_rect()
         self.pos = pos
         self.hgt = hgt
@@ -1028,7 +1165,21 @@ class Piece(pygame.sprite.Sprite):
 
     def pos_to_coord(self) -> tuple[int, int]:
         """Вернуть координаты позиции.
-        @return Координаты шашки
+
+        @return Координаты шашки.
+
+        Математические формулы для вычисления координат:
+        \f[
+        (x, y) = 
+        \begin{cases} 
+        (56 + pos \times 41, 548 - hgt \times 17) & \text{если } 0 \leq pos < 6 \\
+        (116 + pos \times 41, 548 - hgt \times 17) & \text{если } 6 \leq pos < 12 \\
+        (116 + (23 - pos) \times 41, 23 + hgt \times 17) & \text{если } 12 \leq pos < 18 \\
+        (56 + (23 - pos) \times 41, 23 + hgt \times 17) & \text{если } 18 \leq pos < 24 \\
+        (4, 4 + hgt \times 33) & \text{если } pos = 24 \\
+        (621, 563 - hgt \times 33) & \text{если } pos = 25 \\
+        \end{cases}
+        \f]
         """
         coord = (-1, -1)
         pos = self.pos
@@ -1072,7 +1223,10 @@ class Piece(pygame.sprite.Sprite):
 
 
 class AbstractLayer:
-    """Абстрактный класс слоя."""
+    """
+    Абстрактный класс слоя.
+    Базовый класс для всех слоев интерфейса, определяет необходимый интерфейс методов.
+    """
 
     def __init__(self, display: Display):
         """Конструктор.
@@ -1106,7 +1260,10 @@ class AbstractLayer:
 
 
 class Menu(AbstractLayer):
-    """Класс слоя меню."""
+    """
+    Класс слоя меню.
+    Отвечает за отрисовку и взаимодействие пользователя с меню игры.
+    """
 
     def __init__(self, display: Display):
         """Конструктор.
@@ -1124,12 +1281,15 @@ class Menu(AbstractLayer):
         self.__group.empty()
         self.__buttons.clear()
         pygame.draw.rect(self.__surf, (0, 0, 0), (self.__surf.get_rect()), 0)
-        pygame.draw.rect(self.__surf, (100, 100, 100), (self.__surf.get_rect()), 200)
+        pygame.draw.rect(self.__surf, (100, 100, 100),
+                         (self.__surf.get_rect()), 200)
         self.__buttons.append(Button().init(0, "Меню:", 293, 105))
         self.__buttons.append(Button().init(1, "Игрок 1:", 120, 135))
         self.__buttons.append(Button().init(2, "Игрок 2:", 120, 165))
-        self.__buttons.append(Button().init(3, "", 380, 135, ButtonStatus.ENABLED))
-        self.__buttons.append(Button().init(4, "", 380, 165, ButtonStatus.ENABLED))
+        self.__buttons.append(Button().init(
+            3, "", 380, 135, ButtonStatus.ENABLED))
+        self.__buttons.append(Button().init(
+            4, "", 380, 165, ButtonStatus.ENABLED))
         self.__buttons.append(
             Button().init(5, "Новая партия", 120, 195, ButtonStatus.ENABLED)
         )
@@ -1138,12 +1298,16 @@ class Menu(AbstractLayer):
         )
         self.__buttons.append(Button().init(7, "Таблица рекордов:", 213, 225))
         self.__buttons.append(Button().init(8, "Сыграно партий:", 120, 255))
-        self.__buttons.append(Button().init(9, "Не доиграно партий:", 120, 285))
+        self.__buttons.append(Button().init(
+            9, "Не доиграно партий:", 120, 285))
         self.__buttons.append(Button().init(10, "Побед 1 игрока:", 120, 315))
         self.__buttons.append(Button().init(11, "Побед 2 игрока:", 120, 345))
-        self.__buttons.append(Button().init(12, "Самая короткая партия:", 120, 375))
-        self.__buttons.append(Button().init(13, "Самая длинная партия:", 120, 405))
-        self.__buttons.append(Button().init(14, "Среднее время партии:", 120, 435))
+        self.__buttons.append(Button().init(
+            12, "Самая короткая партия:", 120, 375))
+        self.__buttons.append(Button().init(
+            13, "Самая длинная партия:", 120, 405))
+        self.__buttons.append(Button().init(
+            14, "Среднее время партии:", 120, 435))
         self.__buttons.append(Button().init(15, "", 420, 255))
         self.__buttons.append(Button().init(16, "", 420, 285))
         self.__buttons.append(Button().init(17, "", 420, 315))
@@ -1158,7 +1322,8 @@ class Menu(AbstractLayer):
             Button().init(23, "Выход", 460, 465, ButtonStatus.ENABLED)
         )
         self.__buttons.append(Button().init(24, "Редактор:", 120, 525))
-        self.__buttons.append(Button().init(25, "On", 380, 525, ButtonStatus.ENABLED))
+        self.__buttons.append(Button().init(
+            25, "On", 380, 525, ButtonStatus.ENABLED))
         self.__buttons.append(Button().init(26, "Время партии:", 120, 495))
         self.__buttons.append(Button().init(27, "", 380, 495))
         self.__group.add(self.__buttons)
@@ -1194,8 +1359,10 @@ class Menu(AbstractLayer):
 
     def __commands(self) -> None:
         """Привязать команды к кнопкам."""
-        self.__buttons[3].command = lambda *x: self.display.control.change_settings(0)
-        self.__buttons[4].command = lambda *x: self.display.control.change_settings(1)
+        self.__buttons[3].command = lambda *x: self.display.control.change_settings(
+            0)
+        self.__buttons[4].command = lambda *x: self.display.control.change_settings(
+            1)
         self.__buttons[5].command = lambda *x: self.display.control.restart()
         self.__buttons[6].command = lambda *x: self.display.toggle_menu()
         self.__buttons[23].command = lambda *x: self.display.control.exit()
@@ -1213,13 +1380,17 @@ class Menu(AbstractLayer):
     def draw(self) -> None:
         """Отрисовать меню."""
         pygame.draw.rect(self.__surf, (0, 0, 0), (self.__surf.get_rect()), 0)
-        pygame.draw.rect(self.__surf, (100, 100, 100), (self.__surf.get_rect()), 200)
+        pygame.draw.rect(self.__surf, (100, 100, 100),
+                         (self.__surf.get_rect()), 200)
         self.__group.draw(self.__surf)
         self.display.screen.blit(self.__surf, (0, 0))
 
 
 class Panel(AbstractLayer):
-    """Класс слоя панели."""
+    """
+    Класс слоя панели.
+    Слой панели управления, отображает информацию о ходах и состоянии игры, а также кнопки управления.
+    """
 
     def __init__(self, display: Display):
         """Конструктор.
@@ -1243,7 +1414,8 @@ class Panel(AbstractLayer):
             Button().init(2, "Бросьте кости", 500, 5, ButtonStatus.ENABLED)
         )
         self.buttons.append(Button().init(3, "Начало игры", 5, 35))
-        self.buttons.append(Button().init(4, "Меню", 590, 35, ButtonStatus.ENABLED))
+        self.buttons.append(Button().init(
+            4, "Меню", 590, 35, ButtonStatus.ENABLED))
         self.__commands()
         self.__group.add(self.buttons)
         self.__group.draw(self.__surf)
@@ -1303,7 +1475,8 @@ class Panel(AbstractLayer):
         """
         for key in self.__group:
             if (
-                key.rect.collidepoint((pos[0], pos[1] - self.display.height + 60))
+                key.rect.collidepoint(
+                    (pos[0], pos[1] - self.display.height + 60))
                 and key.status == ButtonStatus.ENABLED
             ):
                 key.command()
@@ -1316,7 +1489,10 @@ class Panel(AbstractLayer):
 
 
 class Pieces(AbstractLayer):
-    """Класс слоя шашек."""
+    """
+    Класс слоя шашек.
+    Отвечает за отрисовку шашек на доске и их взаимодействие.
+    """
 
     def __init__(self, display: Display):
         """Конструктор.
@@ -1337,7 +1513,8 @@ class Pieces(AbstractLayer):
         self.stay = False
         self.group.empty()
         self.__pieces.clear()
-        self.__pieces = [Piece() for _ in range(self.display.party.state.amount)]
+        self.__pieces = [Piece()
+                         for _ in range(self.display.party.state.amount)]
         for i, _ in enumerate(self.__ind):
             if self.__ind[i][0] != -1:
                 for j in range(1, len(self.__ind[i])):
@@ -1406,13 +1583,19 @@ class Pieces(AbstractLayer):
 
 
 class Display:
-    """Класс представления."""
+    """
+    Класс представления.
+    Отвечает за визуализацию игры, управляет слоями интерфейса и отображением элементов игры на экране.
+
+    \image html board.jpg "Вид игровой доски"
+    """
 
     def __init__(self, party: Party, control: Control):
         """Конструктор.
         @param party Экземпляр класса модели
         @param control Экземпляр класса контроллера
         """
+        # Инициализация переменных
         self.party = party
         self.control = control
         self.update = True
@@ -1424,16 +1607,18 @@ class Display:
         self.menu = Menu(self)
         self.panel = Panel(self)
 
+        # Приватные переменные
         self.__view_menu = True
         self.__back = pygame.image.load("./resources/board.jpg").convert()
 
+        # Установка иконки и заголовка окна
         pygame.display.set_icon(pygame.image.load("./resources/icon.png"))
         pygame.display.set_caption("Длинные нарды")
         self.control.set_display(self)
         self.init()
 
     def init(self) -> None:
-        """Инициализировать."""
+        """Инициализировать представление."""
         self.menu.init()
         self.panel.init()
         self.pieces.refresh()
@@ -1455,29 +1640,41 @@ class Display:
         """Обновить состояние представления."""
         self.pieces.refresh()
         for key in self.pieces.group:
-            if key.status == PieceStatus.CLICKED:
-                self.update = True
-                pos = pygame.mouse.get_pos()
-                key.rect.x = pos[0] - (key.rect.width // 2)
-                key.rect.y = pos[1] - (key.rect.height // 2)
-            elif key.status == PieceStatus.TO_HOME:
-                self.update = True
-                dist = math.floor(
-                    math.sqrt(
-                        (key.home_x - key.rect.x) ** 2 + (key.home_y - key.rect.y) ** 2
-                    )
-                )
-                if dist <= 5:
-                    key.status = PieceStatus.STAY
-                    next_x = key.home_x
-                    next_y = key.home_y
-                else:
-                    next_x = key.rect.x + (5 * (key.home_x - key.rect.x)) // dist
-                    next_y = key.rect.y + (5 * (key.home_y - key.rect.y)) // dist
-                key.old_x = key.rect.x
-                key.old_y = key.rect.y
-                key.rect.x = next_x
-                key.rect.y = next_y
+            self.__process_piece(key)
+
+    def __process_piece(self, piece: Piece) -> None:
+        """Обработать состояние отдельной шашки.
+        @param piece Шашка
+        """
+        if piece.status == PieceStatus.CLICKED:
+            self.update = True
+            self.__move_clicked_piece(piece)
+        elif piece.status == PieceStatus.TO_HOME:
+            self.update = True
+            self.__move_piece_to_home(piece)
+
+    def __move_clicked_piece(self, piece: Piece) -> None:
+        """Перемещать шашку при клике.
+        @param piece Шашка
+        """
+        pos = pygame.mouse.get_pos()
+        piece.rect.x = pos[0] - piece.rect.width // 2
+        piece.rect.y = pos[1] - piece.rect.height // 2
+
+    def __move_piece_to_home(self, piece: Piece) -> None:
+        """Отправить шашку домой.
+        @param piece Шашка
+        """
+        piece.old_x, piece.old_y = piece.rect.x, piece.rect.y
+        dist = math.hypot(piece.home_x - piece.rect.x,
+                          piece.home_y - piece.rect.y)
+        if dist <= 5:
+            piece.status = PieceStatus.STAY
+            piece.rect.x, piece.rect.y = piece.home_x, piece.home_y
+        else:
+            ratio = 5 / dist
+            piece.rect.x += math.floor((piece.home_x - piece.rect.x) * ratio)
+            piece.rect.y += math.floor((piece.home_y - piece.rect.y) * ratio)
 
     def draw(self) -> None:
         """Отрисовать представление."""
@@ -1495,23 +1692,39 @@ class Display:
         self.update = True
         if event.type == pygame.USEREVENT + 1:
             self.control.timer()
+
         if self.__view_menu:
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                if event.button == 1:
-                    self.menu.click(pos)
+            self.__handle_menu_event(event)
         else:
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                if event.button == 1:
-                    self.panel.click(pos)
-                    self.pieces.click(pos)
-            if event.type == pygame.MOUSEBUTTONUP:
-                self.pieces.release()
+            self.__handle_game_event(event)
+
+    def __handle_menu_event(self, event: pygame.event.Event) -> None:
+        """Обработать события в меню.
+        @param event Событие
+        """
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            pos = pygame.mouse.get_pos()
+            if event.button == 1:
+                self.menu.click(pos)
+
+    def __handle_game_event(self, event: pygame.event.Event) -> None:
+        """Обработать события в игре.
+        @param event Событие
+        """
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            pos = pygame.mouse.get_pos()
+            if event.button == 1:
+                self.panel.click(pos)
+                self.pieces.click(pos)
+        elif event.type == pygame.MOUSEBUTTONUP:
+            self.pieces.release()
 
 
 class Game:
-    """Основной класс игры."""
+    """
+    Основной класс игры.
+    Инициализирует и управляет основными компонентами игры, такими как модель, контроллер и представление.
+    """
 
     def __init__(self, record: Record):
         """Конструктор.
@@ -1575,17 +1788,22 @@ class Game:
 
         self.__update_record()
 
+    def save_record_to_file(self, filename: str) -> None:
+        """Сохранить текущую статистику в файл.
+        @param filename Имя файла
+        """
+        self.record.write(filename)
+
 
 def main() -> None:
     """Точка входа."""
     filename = "./resources/record.json"
-    record = Record().read(filename)
+    record = Record().load_from_file(filename)
 
     game = Game(record)
     game.run()
 
-    record = game.record
-    record.write(filename)
+    game.save_record_to_file(filename)
 
 
 if __name__ == "__main__":
